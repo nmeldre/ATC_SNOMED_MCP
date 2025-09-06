@@ -23,12 +23,12 @@ from improved_medicinal_product_mapper import XMLMedicinalProductMapper
 import json
 
 # Initialize FastMCP server
-mcp = FastMCP("Medicinal Product Mapper")
+server = FastMCP("Medicinal Product Mapper")
 
 # Initialize the mapper
 mapper = XMLMedicinalProductMapper()
 
-@mcp.tool()
+@server.tool()
 def map_medications_from_xml(xml_content: str) -> str:
     """
     Map substance names to SNOMED CT Concept IDs and ATC codes from XML input.
@@ -112,7 +112,7 @@ def map_medications_from_xml(xml_content: str) -> str:
             }
         }, indent=2)
 
-@mcp.tool()
+@server.tool()
 def get_atc_codes(substance_name: str) -> str:
     """
     Get ATC codes for a specific substance from Felleskatalogen.
@@ -141,7 +141,7 @@ def get_atc_codes(substance_name: str) -> str:
             "atc_codes": "ATC code not found"
         }, indent=2)
 
-@mcp.tool()
+@server.tool()
 def get_snomed_concept_id(substance_name: str) -> str:
     """
     Get SNOMED CT Concept ID for a specific substance.
@@ -185,4 +185,4 @@ def get_snomed_concept_id(substance_name: str) -> str:
         }, indent=2)
 
 if __name__ == "__main__":
-    mcp.run()
+    server.run()

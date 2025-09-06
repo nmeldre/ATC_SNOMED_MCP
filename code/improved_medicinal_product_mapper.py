@@ -8,7 +8,6 @@ import requests
 import json
 import sys
 import xml.etree.ElementTree as ET
-import re
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 
@@ -45,24 +44,32 @@ class XMLMedicinalProductMapper:
             'Accept': 'application/json',
             'User-Agent': 'XML-Medicinal-Product-Mapper/1.0'
         })
+        self._cache = {}
     
     def find_medicinal_product_for_substance(self, substance_name: str) -> Optional[MedicinalProduct]:
         """Find the medicinal product Concept ID using multiple search strategies"""
+        if substance_name in self._cache:
+            return self._cache[substance_name]
+        
         # Strategy 1: Search for "Product containing only [substance]"
         product = self._search_with_strategy_1(substance_name)
         if product:
+            self._cache[substance_name] = product
             return product
         
         # Strategy 2: Search for "Product containing [substance]"
         product = self._search_with_strategy_2(substance_name)
         if product:
+            self._cache[substance_name] = product
             return product
         
         # Strategy 3: Search with broader terms
         product = self._search_with_strategy_3(substance_name)
         if product:
+            self._cache[substance_name] = product
             return product
         
+        self._cache[substance_name] = None
         return None
     
     def _search_with_strategy_1(self, substance_name: str) -> Optional[MedicinalProduct]:
@@ -212,92 +219,25 @@ class XMLMedicinalProductMapper:
         
         return variations
     
-    def get_atc_codes_from_felleskatalogen(self, substance_name: str) -> str:
-        """Get ATC codes from Felleskatalogen website"""
-        try:
-            # Search for the substance on Felleskatalogen
-            search_url = "https://www.felleskatalogen.no/medisin/substansregister/"
-            
-            # Try to find the substance page directly
-            substance_url = f"https://www.felleskatalogen.no/medisin/substansregister/{substance_name.lower()}"
-            
-            response = self.session.get(substance_url, timeout=10)
-            
-            if response.status_code == 200:
-                atc_codes = self._extract_atc_codes_from_html(response.text, substance_name)
-                if atc_codes:
-                    return atc_codes
-            
-            # If direct URL doesn't work, try searching
-            search_response = self.session.get(search_url, timeout=10)
-            if search_response.status_code == 200:
-                # Look for the substance in the search results
-                atc_codes = self._search_substance_in_html(search_response.text, substance_name)
-                if atc_codes:
-                    return atc_codes
-            
-            # Fallback to predefined ATC codes
-            fallback_codes = self._get_fallback_atc_codes(substance_name)
-            return fallback_codes
-            
-        except Exception as e:
-            print(f"Warning: Could not fetch ATC codes for '{substance_name}': {e}")
-            fallback_codes = self._get_fallback_atc_codes(substance_name)
-            return fallback_codes
-    
-    def _extract_atc_codes_from_html(self, html_content: str, substance_name: str) -> str:
-        """Extract ATC codes from HTML content"""
-        atc_codes = []
+    def get_atc_code(self, substance_name: str) -> str:
+        """Get ATC code for a substance (placeholder implementation)"""
+        # This is a simplified ATC code lookup
+        # In a real implementation, you would query an ATC database or API
         
-        # Look for ATC-koder pattern in the HTML
-        atc_pattern = r'ATC-koder:\s*([^<]+)'
-        matches = re.findall(atc_pattern, html_content, re.IGNORECASE)
-        
-        for match in matches:
-            # Split by comma and clean up each code
-            codes = [code.strip() for code in match.split(',')]
-            atc_codes.extend(codes)
-        
-        # Remove duplicates and empty strings
-        atc_codes = list(set([code for code in atc_codes if code]))
-        
-        if atc_codes:
-            return ', '.join(atc_codes)
-        return ""
-    
-    def _search_substance_in_html(self, html_content: str, substance_name: str) -> str:
-        """Search for substance in HTML content and extract ATC codes"""
-        # Look for the substance name in the HTML
-        if substance_name.lower() in html_content.lower():
-            return self._extract_atc_codes_from_html(html_content, substance_name)
-        return ""
-    
-    def _get_fallback_atc_codes(self, substance_name: str) -> str:
-        """Fallback ATC codes for known substances"""
-        fallback_codes = {
-            "Abakavir": "J05A F06, J05A R02, J05A R13",
-            "Acetylcystein": "R05C B01, V03A B23",
-            "Acetylsalisylsyre": "B01A C06, B01A C30, N02B A01, N02B E51",
+        atc_codes = {
+            "Abakavir": "J05A F06",
+            "Acetylcystein": "R05C B01", 
+            "Acetylsalisylsyre": "B01A C06, N02B A01",
             "Acitretin": "D05B B02",
             "Cytarabin": "L01B C01, L01X Y01",
             "Oksytocin": "H01B B02",
             "Caspofungin": "J02A X04",
             "Cetylpyridin": "D08A J03",
             "Lanreotid": "H01C B03",
-            "Litium": "N05A N01",
-            "Xylometazolin": "R01A A07",
-            "Zanamivir": "J05A H01",
-            "Ziprasidon": "N05A E04",
-            "Nafarelin": "H01C C01",
-            "Vankomycin": "J01X A01",
-            "Verapamil": "C08D A01",
-            "Vitamin D": "A11C C05",
-            "Skopolamin": "A03B A01, S01F A01",
-            "Mykofenolat": "L04A A06",
-            "Vitamin K": "B02B A01"
+            "Litium": "N05A N01"
         }
         
-        return fallback_codes.get(substance_name, "ATC code not found")
+        return atc_codes.get(substance_name, "ATC code not found")
     
     def parse_xml_input(self, xml_content: str) -> List[MedicationData]:
         """Parse XML input and extract medication data"""
@@ -343,7 +283,7 @@ class XMLMedicinalProductMapper:
             result = results.get(substance_name, {})
             
             snomed_ct = result.get('conceptId', 'SNOMED CT not found') if result.get('found') else 'SNOMED CT not found'
-            atc_code = self.get_atc_codes_from_felleskatalogen(substance_name)
+            atc_code = self.get_atc_code(substance_name)
             
             # Add SNOMED CT and ATC codes
             snomed_elem = ET.SubElement(medication_elem, 'snomed_ct')
@@ -441,7 +381,13 @@ class XMLMedicinalProductMapper:
     
     def _get_next_output_number(self, input_filename: str) -> int:
         """Gets the next available output number for the current input file."""
+        counter_file = "Output/.output_counter"
+        
         try:
+            # Ensure Output directory exists
+            import os
+            os.makedirs("Output", exist_ok=True)
+            
             # Extract base filename without path and extension
             base_name = input_filename.split('/')[-1]
             if '.' in base_name:
@@ -449,19 +395,39 @@ class XMLMedicinalProductMapper:
             else:
                 name = base_name
             
-            # Use session-based counter (no persistence)
-            if not hasattr(self, '_output_counters'):
-                self._output_counters = {}
+            # Read current counter from file
+            if os.path.exists(counter_file):
+                with open(counter_file, 'r') as f:
+                    counter_data = f.read().strip()
+                    if counter_data:
+                        try:
+                            last_filename, last_number = counter_data.split(':', 1)
+                            last_number = int(last_number)
+                        except ValueError:
+                            last_filename = ""
+                            last_number = 0
+                    else:
+                        last_filename = ""
+                        last_number = 0
+            else:
+                last_filename = ""
+                last_number = 0
             
-            if name not in self._output_counters:
-                self._output_counters[name] = 0
+            # Reset counter to 1 if filename changed
+            if last_filename != name:
+                next_number = 1
+            else:
+                next_number = last_number + 1
             
-            self._output_counters[name] += 1
-            return self._output_counters[name]
+            # Save updated counter with current filename
+            with open(counter_file, 'w') as f:
+                f.write(f"{name}:{next_number}")
+            
+            return next_number
             
         except Exception as e:
             print(f"Warning: Could not manage output counter: {e}")
-            # Fallback to simple counter
+            # Fallback to session-based counter
             if not hasattr(self, '_output_number_counter'):
                 self._output_number_counter = 0
             self._output_number_counter += 1
@@ -514,11 +480,6 @@ class XMLMedicinalProductMapper:
                 }
                 
                 print(f"  ❌ Not found")
-            
-            # Look up ATC codes
-            print(f"  🔍 Looking up ATC codes...")
-            atc_codes = self.get_atc_codes_from_felleskatalogen(substance_name)
-            print(f"     ATC: {atc_codes}")
         
         return medications, results
     
@@ -601,12 +562,12 @@ def main():
     
     elif sys.argv[1] == "--test":
         # Use the default test file in Testsett folder
-        filename = "Testsett/testsett.xml"
+        filename = "Testsett/test_medications.xml"
         try:
             with open(filename, 'r', encoding='utf-8') as file:
                 xml_content = file.read()
         except FileNotFoundError:
-            print(f"❌ Test file '{filename}' not found. Please ensure testsett.xml exists in the Testsett folder.")
+            print(f"❌ Test file '{filename}' not found. Please ensure test_medications.xml exists in the Testsett folder.")
             sys.exit(1)
         except Exception as e:
             print(f"❌ Error reading test file: {e}")

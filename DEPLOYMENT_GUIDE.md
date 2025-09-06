@@ -53,7 +53,7 @@ requests>=2.31.0
 2. **Create New Server**: Click "Deploy New Server"
 3. **Connect Repository**: Link your GitHub repository
 4. **Configure Deployment**:
-   - **Entry Point**: `mcp_server.py`
+   - **Entry Point**: `mcp_server.py:server`
    - **Configuration**: Uses `fastmcp.json`
    - **Dependencies**: Automatically installs from `requirements_mcp.txt`
 

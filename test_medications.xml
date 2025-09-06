@@ -1,0 +1,20 @@
+<XML>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<XML-File xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<Medication>
+		<sub_id>TEST-001</sub_id>
+		<substance>Acetylcystein</substance>
+		<advice>Test advice for Acetylcystein</advice>
+	</Medication>
+	<Medication>
+		<sub_id>TEST-002</sub_id>
+		<substance>Acitretin</substance>
+		<advice>Test advice for Acitretin</advice>
+	</Medication>
+	<Medication>
+		<sub_id>TEST-003</sub_id>
+		<substance>Caspofungin</substance>
+		<advice>Test advice for Caspofungin</advice>
+	</Medication>
+</XML-File>
+</XML>
