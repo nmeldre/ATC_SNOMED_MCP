@@ -1,0 +1,57 @@
+{
+  "name": "medicinal-product-mapper",
+  "version": "1.0.0",
+  "description": "XML-based medicinal product mapper with SNOMED CT and ATC code lookup",
+  "entrypoint": "mcp_server.py",
+  "transport": {
+    "type": "http"
+  },
+  "dependencies": [
+    "requests",
+    "xml.etree.ElementTree"
+  ],
+  "tools": [
+    {
+      "name": "map_medications_from_xml",
+      "description": "Map substance names to SNOMED CT Concept IDs and ATC codes from XML input",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "xml_content": {
+            "type": "string",
+            "description": "XML content containing medication data with substance names"
+          }
+        },
+        "required": ["xml_content"]
+      }
+    },
+    {
+      "name": "get_atc_codes",
+      "description": "Get ATC codes for a specific substance from Felleskatalogen",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "substance_name": {
+            "type": "string",
+            "description": "Name of the substance to look up ATC codes for"
+          }
+        },
+        "required": ["substance_name"]
+      }
+    },
+    {
+      "name": "get_snomed_concept_id",
+      "description": "Get SNOMED CT Concept ID for a specific substance",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "substance_name": {
+            "type": "string",
+            "description": "Name of the substance to look up SNOMED CT Concept ID for"
+          }
+        },
+        "required": ["substance_name"]
+      }
+    }
+  ]
+}
