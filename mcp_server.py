@@ -33,11 +33,24 @@ def map_medications_from_xml(xml_content: str) -> str:
     """
     Map substance names to SNOMED CT Concept IDs and ATC codes from XML input.
     
+    This tool processes XML containing medication data and returns comprehensive mapping
+    results including SNOMED CT Concept IDs and ATC codes for all substances found.
+    
     Args:
-        xml_content: XML content containing medication data with substance names
+        xml_content: XML content containing medication data with substance names.
+                    Expected format: <XML><XML-File><Medication><substance>Name</substance>...</Medication></XML-File></XML>
         
     Returns:
-        JSON string with mapping results including SNOMED CT and ATC codes
+        JSON string with mapping results including:
+        - success: boolean indicating if operation succeeded
+        - xml_output: Generated XML with SNOMED CT and ATC codes added
+        - medications: Array of medication objects with mapping results
+        - summary: Statistics about mapping success rates
+        
+    Example:
+        Input XML with substance "Acetylsalisylsyre" will return:
+        - SNOMED CT: "SNOMED CT not found" (if not found)
+        - ATC codes: "B01A C06, B01A C30, N02B A01, N02B E51"
     """
     try:
         # Parse XML and map medications
