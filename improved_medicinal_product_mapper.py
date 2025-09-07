@@ -45,24 +45,64 @@ class XMLMedicinalProductMapper:
             'Accept': 'application/json',
             'User-Agent': 'XML-Medicinal-Product-Mapper/1.0'
         })
+        # Language preference: Norwegian then English for Snowstorm description matching
+        self.accept_language = 'nb-x-sct,en-x-sct'
+        # Aliases to improve recall across languages/terms
+        self._alias_map = {
+            'acetylsalisylsyre': ['acetylsalicylic acid', 'aspirin'],
+            'hydrokortison': ['hydrocortisone'],
+            'oksytocin': ['oxytocin'],
+            'cetylpyridin': ['cetylpyridinium'],
+        }
+        # Debug helpers for last decision context
+        self._last_candidates: List[Dict[str, Any]] = []
+        self._last_confidence: Optional[int] = None
     
     def find_medicinal_product_for_substance(self, substance_name: str) -> Optional[MedicinalProduct]:
         """Find the medicinal product Concept ID using multiple search strategies"""
-        # Strategy 1: Search for "Product containing only [substance]"
-        product = self._search_with_strategy_1(substance_name)
-        if product:
-            return product
-        
-        # Strategy 2: Search for "Product containing [substance]"
-        product = self._search_with_strategy_2(substance_name)
-        if product:
-            return product
-        
-        # Strategy 3: Search with broader terms
-        product = self._search_with_strategy_3(substance_name)
-        if product:
-            return product
-        
+        # Two-step ontology search: Ingredient -> Only product
+        self._last_candidates = []
+        self._last_confidence = None
+        substance_candidates = self._find_substance_concepts(substance_name)
+        ranked: List[Tuple[MedicinalProduct, int]] = []
+        for sub in substance_candidates[:5]:
+            products = self._find_only_product_for_substance(sub['conceptId'])
+            for p in products:
+                score = 0
+                # FSN pattern bonus
+                if self._is_exact_only_match(p, sub.get('pt') or substance_name):
+                    score += 100
+                # Term match contribution
+                score += self._calculate_match_score(p, substance_name)
+                score += sub.get('score', 0)
+                ranked.append((p, score))
+        if ranked:
+            ranked.sort(key=lambda t: t[1], reverse=True)
+            best_prod, best_score = ranked[0]
+            # expose for MCP server (confidence + alternatives)
+            self._last_confidence = best_score
+            self._last_candidates = [
+                {
+                    'conceptId': prod.conceptId,
+                    'fsn': prod.fsn,
+                    'pt': prod.pt,
+                    'score': sc
+                } for (prod, sc) in ranked[:3]
+            ]
+            return best_prod
+
+        # Fallback to prior term-based strategies
+        for strat in (self._search_with_strategy_1, self._search_with_strategy_2, self._search_with_strategy_3):
+            product = strat(substance_name)
+            if product:
+                self._last_confidence = self._calculate_match_score(product, substance_name)
+                self._last_candidates = [{
+                    'conceptId': product.conceptId,
+                    'fsn': product.fsn,
+                    'pt': product.pt,
+                    'score': self._last_confidence
+                }]
+                return product
         return None
     
     def _search_with_strategy_1(self, substance_name: str) -> Optional[MedicinalProduct]:
@@ -114,6 +154,83 @@ class XMLMedicinalProductMapper:
                     return product
         
         return None
+
+    def _normalize_name(self, text: str) -> str:
+        if not text:
+            return ''
+        t = text.strip().lower()
+        t = re.sub(r"\s+", " ", t)
+        t = t.replace('ø', 'o').replace('å', 'a').replace('æ', 'ae')
+        return t
+
+    def _find_substance_concepts(self, substance_name: str, limit: int = 20) -> List[Dict[str, Any]]:
+        url = f"{self.base_url}/snowstorm/snomed-ct/MAIN%2FSNOMEDCT-NO/concepts"
+        ecl_substance = "<< 105590001 |Substance|"
+        concepts: Dict[str, Dict[str, Any]] = {}
+        for term in self._get_substance_variations(substance_name):
+            params = {
+                'activeFilter': 'true',
+                'term': term,
+                'ecl': ecl_substance,
+                'offset': 0,
+                'limit': limit,
+                'acceptLanguage': self.accept_language
+            }
+            try:
+                r = self.session.get(url, params=params)
+                r.raise_for_status()
+                data = r.json()
+                for item in data.get('items', []):
+                    cid = item.get('conceptId')
+                    if not cid:
+                        continue
+                    fsn = item.get('fsn', {}).get('term', '')
+                    pt = item.get('pt', {}).get('term', '')
+                    score = 0
+                    low = term.lower()
+                    if low in fsn.lower() or low in pt.lower():
+                        score += 5
+                    if 'substance' in fsn.lower():
+                        score += 2
+                    prev = concepts.get(cid)
+                    if not prev or score > prev['score']:
+                        concepts[cid] = {'conceptId': cid, 'fsn': fsn, 'pt': pt, 'score': score}
+            except Exception as e:
+                print(f"Error finding substance '{term}': {e}")
+                continue
+        return sorted(concepts.values(), key=lambda x: x['score'], reverse=True)
+
+    def _find_only_product_for_substance(self, substance_concept_id: str, limit: int = 50) -> List[MedicinalProduct]:
+        url = f"{self.base_url}/snowstorm/snomed-ct/MAIN%2FSNOMEDCT-NO/concepts"
+        ecl = (
+            "< 763158003 |Medicinal product| : 127489000 |Has active ingredient| = << {} "
+            "MINUS (* : 411116001 |Has manufactured dose form| = *)"
+        ).format(substance_concept_id)
+        params = {
+            'activeFilter': 'true',
+            'ecl': ecl,
+            'offset': 0,
+            'limit': limit,
+            'acceptLanguage': self.accept_language
+        }
+        try:
+            r = self.session.get(url, params=params)
+            r.raise_for_status()
+            items = r.json().get('items', [])
+            products: List[MedicinalProduct] = []
+            for item in items:
+                products.append(MedicinalProduct(
+                    conceptId=item.get('conceptId', ''),
+                    fsn=item.get('fsn', {}).get('term', ''),
+                    pt=item.get('pt', {}).get('term', ''),
+                    active=item.get('active', False),
+                    definitionStatus=item.get('definitionStatus', ''),
+                    effectiveTime=item.get('effectiveTime', '')
+                ))
+            return products
+        except Exception as e:
+            print(f"Error ECL for substance {substance_concept_id}: {e}")
+            return []
     
     def _search_medicinal_products(self, search_term: str, limit: int = 100) -> List[MedicinalProduct]:
         """Search the medicinal product API"""
@@ -127,7 +244,8 @@ class XMLMedicinalProductMapper:
             'term': search_term,
             'ecl': ecl_query,
             'offset': 0,
-            'limit': limit
+            'limit': limit,
+            'acceptLanguage': self.accept_language
         }
         
         try:
@@ -198,19 +316,27 @@ class XMLMedicinalProductMapper:
     
     def _get_substance_variations(self, substance_name: str) -> List[str]:
         """Get common variations of a substance name"""
-        variations = [substance_name]
-        
-        # Add common variations
-        if substance_name.lower() == "hydrokodon":
+        norm = self._normalize_name(substance_name)
+        variations = [substance_name, norm, substance_name.title()]
+        # Known targeted aliases
+        if norm == "hydrokodon":
             variations.extend(["hydrocodone", "hydrocodone bitartrate"])
-        elif substance_name.lower() == "hydrokortison":
+        elif norm == "hydrokortison":
             variations.extend(["hydrocortisone", "cortisol"])
-        elif substance_name.lower() == "artemeter":
+        elif norm == "artemeter":
             variations.extend(["artemether"])
-        elif substance_name.lower() == "ofloksacin":
+        elif norm == "ofloksacin":
             variations.extend(["ofloxacin"])
-        
-        return variations
+        # Table-driven aliases
+        variations.extend(self._alias_map.get(norm, []))
+        # De-duplicate case-insensitively
+        seen = set()
+        out: List[str] = []
+        for v in variations:
+            if v and v.lower() not in seen:
+                seen.add(v.lower())
+                out.append(v)
+        return out
     
     def get_atc_codes_from_felleskatalogen(self, substance_name: str) -> str:
         """Get ATC codes from Felleskatalogen website"""

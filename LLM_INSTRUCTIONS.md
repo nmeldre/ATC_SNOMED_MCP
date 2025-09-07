@@ -38,7 +38,9 @@ This MCP server provides medicinal product mapping capabilities with SNOMED CT C
 </XML>
 ```
 
-**Output**: JSON with mapping results and generated XML output
+**Output**: JSON with mapping results and generated XML output. Includes:
+- `confidence`: numeric score reflecting match strength
+- `candidates`: up to 3 alternative product candidates (conceptId, fsn, pt, score)
 
 ### 2. `get_atc_codes`
 **Purpose**: Get ATC codes for a specific substance
@@ -67,6 +69,12 @@ This MCP server provides medicinal product mapping capabilities with SNOMED CT C
 **Output**: JSON with Concept ID and details
 
 ## 🎯 **Usage Guidelines for LLMs**
+### New behavior and robustness
+- The server uses language fallback (nb-x-sct, en-x-sct) when querying SNOMED CT.
+- Two-step ontology search: finds substance concepts first, then products via ECL on `Has active ingredient`.
+- Normalization (diacritics, whitespace) and targeted aliases improve recall.
+- Confidence score and alternative candidates are provided when ambiguity exists.
+- If you receive low confidence or no results, you may decide to retry with synonyms.
 
 ### **When to Use Each Tool**
 
@@ -121,6 +129,10 @@ All tools return JSON with:
 ### **Drug Classes vs Individual Substances**
 - **❌ Don't use**: "Antiviralemidler", "NSAID", "Cytostatika" (drug classes)
 - **✅ Use instead**: Individual substances like "Abakavir", "Acetylsalisylsyre", "Cytarabin"
+
+### Synonym expansion (LLM-driven)
+- If the first attempt yields no/low-confidence results, try common synonyms or English names.
+- Example: "Acetylsalisylsyre" → try "acetylsalicylic acid" or "aspirin".
 
 ## 🚨 **Error Handling**
 

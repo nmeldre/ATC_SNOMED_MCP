@@ -97,7 +97,9 @@ def map_medications_from_xml(xml_content: str) -> str:
                 "snomed_ct": result.get('conceptId', 'SNOMED CT not found') if result.get('found') else 'SNOMED CT not found',
                 "atc_codes": mapper.get_atc_codes_from_felleskatalogen(substance_name),
                 "found": result.get('found', False),
-                "match_type": result.get('match_type', 'Not found')
+                "match_type": result.get('match_type', 'Not found'),
+                "confidence": getattr(mapper, '_last_confidence', None),
+                "candidates": getattr(mapper, '_last_candidates', [])
             }
             
             # Add reference data if present
