@@ -29,16 +29,20 @@ server = FastMCP("Medicinal Product Mapper")
 mapper = XMLMedicinalProductMapper()
 
 @server.tool()
-def map_medications_from_xml(xml_content: str) -> str:
+def map_medications_from_xml(xml_content: str, max_medications: int = 10) -> str:
     """
     Map substance names to SNOMED CT Concept IDs and ATC codes from XML input.
     
     This tool processes XML containing medication data and returns comprehensive mapping
     results including SNOMED CT Concept IDs and ATC codes for all substances found.
     
+    ⚠️ PERFORMANCE WARNING: This tool can be resource-intensive for large XML files.
+    For single substances, use map_single_medication instead.
+    
     Args:
         xml_content: XML content containing medication data with substance names.
                     Expected format: <XML><XML-File><Medication><substance>Name</substance>...</Medication></XML-File></XML>
+        max_medications: Maximum number of medications to process (default: 10, max: 50)
         
     Returns:
         JSON string with mapping results including:
@@ -53,8 +57,12 @@ def map_medications_from_xml(xml_content: str) -> str:
         - ATC codes: "B01A C06, B01A C30, N02B A01, N02B E51"
     """
     try:
+        # Enforce maximum medication limit
+        if max_medications > 50:
+            max_medications = 50
+        
         # Parse XML and map medications
-        medications, results = mapper.map_medications_from_xml(xml_content)
+        medications, results = mapper.map_medications_from_xml(xml_content, max_medications)
         
         if not medications:
             return json.dumps({
@@ -154,6 +162,72 @@ def get_atc_codes(substance_name: str) -> str:
             "substance": substance_name,
             "error": f"Error looking up ATC codes: {str(e)}",
             "atc_codes": "ATC code not found"
+        }, indent=2)
+
+@server.tool()
+def map_single_medication(substance_name: str) -> str:
+    """
+    Map a single substance to SNOMED CT Concept ID and ATC codes.
+    
+    This is a lightweight tool for mapping individual substances without XML processing.
+    Use this instead of map_medications_from_xml when you only need to map one substance.
+    
+    Args:
+        substance_name: Name of the substance to map
+        
+    Returns:
+        JSON string with mapping results for the single substance
+    """
+    try:
+        # Find SNOMED CT mapping
+        medicinal_product = mapper.find_medicinal_product_for_substance(substance_name)
+        
+        # Get ATC codes
+        atc_codes = mapper.get_atc_codes_from_felleskatalogen(substance_name)
+        
+        if medicinal_product:
+            return json.dumps({
+                "success": True,
+                "substance": substance_name,
+                "snomed_ct": {
+                    "concept_id": medicinal_product.conceptId,
+                    "fsn": medicinal_product.fsn,
+                    "pt": medicinal_product.pt,
+                    "status": medicinal_product.definitionStatus,
+                    "effective_time": medicinal_product.effectiveTime,
+                    "match_type": mapper._classify_match(medicinal_product, substance_name)
+                },
+                "atc_codes": atc_codes,
+                "found": True,
+                "confidence": getattr(mapper, '_last_confidence', None),
+                "candidates": getattr(mapper, '_last_candidates', [])
+            }, indent=2)
+        else:
+            return json.dumps({
+                "success": True,
+                "substance": substance_name,
+                "snomed_ct": {
+                    "concept_id": "SNOMED CT not found",
+                    "fsn": None,
+                    "pt": None,
+                    "status": None,
+                    "effective_time": None,
+                    "match_type": "Not found"
+                },
+                "atc_codes": atc_codes,
+                "found": False,
+                "confidence": None,
+                "candidates": []
+            }, indent=2)
+            
+    except Exception as e:
+        return json.dumps({
+            "success": False,
+            "substance": substance_name,
+            "error": f"Error mapping substance: {str(e)}",
+            "snomed_ct": {"concept_id": "Error", "match_type": "Error"},
+            "atc_codes": "Error",
+            "found": False
         }, indent=2)
 
 @server.tool()

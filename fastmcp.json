@@ -13,16 +13,37 @@
   "tools": [
     {
       "name": "map_medications_from_xml",
-      "description": "Map substance names to SNOMED CT Concept IDs and ATC codes from XML input",
+      "description": "Map substance names to SNOMED CT Concept IDs and ATC codes from XML input (resource-intensive, use map_single_medication for single substances)",
       "inputSchema": {
         "type": "object",
         "properties": {
           "xml_content": {
             "type": "string",
             "description": "XML content containing medication data with substance names"
+          },
+          "max_medications": {
+            "type": "integer",
+            "description": "Maximum number of medications to process (default: 10, max: 50)",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
           }
         },
         "required": ["xml_content"]
+      }
+    },
+    {
+      "name": "map_single_medication",
+      "description": "Map a single substance to SNOMED CT Concept ID and ATC codes (lightweight, recommended for single substances)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "substance_name": {
+            "type": "string",
+            "description": "Name of the substance to map"
+          }
+        },
+        "required": ["substance_name"]
       }
     },
     {

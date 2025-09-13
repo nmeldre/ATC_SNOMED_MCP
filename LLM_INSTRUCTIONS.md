@@ -8,9 +8,24 @@ This MCP server provides medicinal product mapping capabilities with SNOMED CT C
 
 ## 🛠️ **Available Tools**
 
-### 1. `map_medications_from_xml`
+### 1. `map_single_medication` ⭐ **RECOMMENDED FOR SINGLE SUBSTANCES**
+**Purpose**: Lightweight mapping of individual substances
+**Best for**: Single substance lookups, quick mapping, avoiding server overload
+**Performance**: Fast, minimal resource usage
+
+**Input Format**:
+```json
+{
+  "substance_name": "Acetylsalisylsyre"
+}
+```
+
+**Output**: JSON with SNOMED CT and ATC mapping for the single substance
+
+### 2. `map_medications_from_xml` ⚠️ **USE SPARINGLY**
 **Purpose**: Complete XML processing with SNOMED CT and ATC mapping
 **Best for**: Processing multiple medications at once from XML input
+**Performance**: Resource-intensive, limited to 10 medications by default (max 50)
 
 **Input Format**:
 ```json
@@ -78,18 +93,25 @@ This MCP server provides medicinal product mapping capabilities with SNOMED CT C
 
 ### **When to Use Each Tool**
 
-1. **Use `map_medications_from_xml`** when:
-   - User provides XML data with multiple medications
-   - User wants complete mapping (both SNOMED CT and ATC codes)
-   - Processing batch requests
+1. **Use `map_single_medication`** ⭐ **PREFERRED** when:
+   - User asks for mapping of a single substance
+   - User provides one substance name
+   - You want both SNOMED CT and ATC codes for one substance
+   - **This is the most efficient tool for single substances**
 
-2. **Use `get_atc_codes`** when:
-   - User asks specifically for ATC codes
+2. **Use `map_medications_from_xml`** ⚠️ **ONLY** when:
+   - User provides XML data with multiple medications (2+)
+   - User specifically requests XML processing
+   - You need to process more than 1 substance at once
+   - **Limit to max 10 medications to avoid server overload**
+
+3. **Use `get_atc_codes`** when:
+   - User asks specifically for ATC codes only
    - User provides a single substance name
    - Quick ATC code lookup needed
 
-3. **Use `get_snomed_concept_id`** when:
-   - User asks specifically for SNOMED CT Concept ID
+4. **Use `get_snomed_concept_id`** when:
+   - User asks specifically for SNOMED CT Concept ID only
    - User provides a single substance name
    - Quick SNOMED CT lookup needed
 
@@ -97,11 +119,12 @@ This MCP server provides medicinal product mapping capabilities with SNOMED CT C
 
 | User Query | Recommended Tool | Reason |
 |------------|------------------|---------|
-| "Map these medications from XML" | `map_medications_from_xml` | Complete processing |
-| "What are the ATC codes for X?" | `get_atc_codes` | Specific ATC lookup |
-| "Find SNOMED CT ID for Y" | `get_snomed_concept_id` | Specific SNOMED lookup |
-| "Process this medication list" | `map_medications_from_xml` | Batch processing |
-| "Get codes for multiple substances" | `get_atc_codes` (multiple calls) | Individual lookups |
+| "Map Acetylsalisylsyre" | `map_single_medication` | Single substance, both codes |
+| "What are the ATC codes for X?" | `get_atc_codes` | Specific ATC lookup only |
+| "Find SNOMED CT ID for Y" | `get_snomed_concept_id` | Specific SNOMED lookup only |
+| "Map these medications from XML" | `map_medications_from_xml` | Multiple medications in XML |
+| "Get codes for multiple substances" | `map_single_medication` (multiple calls) | Individual lookups, more efficient |
+| "Process this medication list" | `map_single_medication` (multiple calls) | More efficient than XML processing |
 
 ## 📊 **Expected Results**
 

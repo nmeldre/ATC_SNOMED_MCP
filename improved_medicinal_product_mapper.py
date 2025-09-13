@@ -593,23 +593,22 @@ class XMLMedicinalProductMapper:
             self._output_number_counter += 1
             return self._output_number_counter
     
-    def map_medications_from_xml(self, xml_content: str) -> Tuple[List[MedicationData], Dict[str, Dict]]:
+    def map_medications_from_xml(self, xml_content: str, max_medications: int = 10) -> Tuple[List[MedicationData], Dict[str, Dict]]:
         """Map medications from XML input to medicinal products"""
         # Parse XML input
         medications = self.parse_xml_input(xml_content)
         
         if not medications:
-            print("❌ No medications found in XML input")
             return [], {}
         
-        print(f"🔍 Found {len(medications)} medications in XML input")
-        print("=" * 80)
+        # Limit the number of medications to process
+        if len(medications) > max_medications:
+            medications = medications[:max_medications]
         
         # Map each substance to medicinal products
         results = {}
         for medication in medications:
             substance_name = medication.substance
-            print(f"\n📋 Mapping: {substance_name}")
             
             medicinal_product = self.find_medicinal_product_for_substance(substance_name)
             
@@ -623,11 +622,6 @@ class XMLMedicinalProductMapper:
                     'effectiveTime': medicinal_product.effectiveTime,
                     'match_type': self._classify_match(medicinal_product, substance_name)
                 }
-                
-                print(f"  ✅ Found: {medicinal_product.conceptId}")
-                print(f"     FSN: {medicinal_product.fsn}")
-                print(f"     PT: {medicinal_product.pt}")
-                print(f"     Match Type: {results[substance_name]['match_type']}")
             else:
                 results[substance_name] = {
                     'found': False,
@@ -638,13 +632,9 @@ class XMLMedicinalProductMapper:
                     'effectiveTime': None,
                     'match_type': 'Not found'
                 }
-                
-                print(f"  ❌ Not found")
             
-            # Look up ATC codes
-            print(f"  🔍 Looking up ATC codes...")
+            # Look up ATC codes (silently)
             atc_codes = self.get_atc_codes_from_felleskatalogen(substance_name)
-            print(f"     ATC: {atc_codes}")
         
         return medications, results
     
